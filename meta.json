@@ -1,14 +1,19 @@
 {
   "$schema": "https://dl.viam.dev/module.schema.json",
   "module_id": "viam:uln2003",
-  "visibility": "private",
-  "url": "",
-  "description": "",
+  "visibility": "public",
+  "url": "https://github.com/viam-modules/uln2003",
+  "description": "Go module for uln2003 28byj-48 motor, compatible with Viam",
   "models": [
     {
-      "api": "",
-      "model": ""
+      "api": "rdk:component:motor",
+      "model": "viam:uln2003:28byj-48"
     }
   ],
-  "entrypoint": ""
+  "build": {
+    "build": "make module",
+    "path": "bin/module.tar.gz",
+    "arch" : ["linux/arm64", "linux/amd64", "darwin/arm64"]
+  },
+  "entrypoint": "bin/uln2003"
 }
