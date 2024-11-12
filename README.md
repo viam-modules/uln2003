@@ -32,7 +32,7 @@ The following attributes are available for `viam:uln2003:28byj-48` motors:
 | Attribute | Type | Required? | Description |
 | --------- | ---- | --------- | ----------  |
 | `board` | string | **Required** | `name` of the [board](https://docs.viam.com/components/board/) the motor driver is wired to. |
-| `pins` | object | **Required** | A JSON object containing the {{< glossary_tooltip term_id="pin-number" text="pin numbers" >}} the `in1`, `in2`, `in3`, and `in4` pins of the motor driver are wired to on the [board](https://docs.viam.com/components/board/). |
+| `pins` | object | **Required** | A JSON object containing the pin numbers the `in1`, `in2`, `in3`, and `in4` pins of the motor driver are wired to on the [board](https://docs.viam.com/components/board/). |
 | `ticks_per_rotation` | int | **Required** | Number of full steps in a rotation. The motor takes 5.625*(1/64)° per step. One full rotation (360°) is 4096 steps. |
 
 Refer to your motor and motor driver data sheets for specifics.
