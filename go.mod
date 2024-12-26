@@ -1,4 +1,4 @@
-module uln2003
+module github.com/viam-modules/uln2003
 
 go 1.23.0
 

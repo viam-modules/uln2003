@@ -4,7 +4,7 @@ package main
 import (
 	"context"
 
-	"uln2003/uln28byj48"
+	"github.com/viam-modules/uln2003/uln28byj48"
 
 	"go.viam.com/rdk/components/motor"
 	"go.viam.com/rdk/logging"
