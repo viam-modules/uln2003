@@ -7,7 +7,9 @@
   "models": [
     {
       "api": "rdk:component:motor",
-      "model": "viam:uln2003:28byj-48"
+      "model": "viam:uln2003:28byj-48",
+      "short_description": "the  uln2003 28byj-48 stepper motor",
+      "markdown_link": "README.md#configure-your-28byj-48-motor"
     }
   ],
   "build": {
