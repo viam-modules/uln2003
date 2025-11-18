@@ -40,9 +40,9 @@ var (
 	maxRPM               = 15.0                   // max rpm of the 28byj-48 motor after gear reduction
 )
 
-// stepSequence contains switching signal for uln2003 pins.
-// Treversing through stepSequence once is one step.
-var stepSequence = [8][4]bool{
+// halfStepSequence contains switching signal for uln2003 pins.
+// Treversing through halfStepSequence once is one step.
+var halfStepSequence = [8][4]bool{
 	{false, false, false, true},
 	{true, false, false, true},
 	{true, false, false, false},
@@ -213,7 +213,8 @@ func (m *uln28byj) doRun() {
 func (m *uln28byj) doStop(ctx context.Context) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	return m.setPins(ctx, [4]bool{false, false, false, false})
+	_, _, err := m.setPins(ctx, [4]bool{false, false, false, false})
+	return err
 }
 
 // Depending on the direction, doStep will either treverse the stepSequence array in ascending
@@ -221,6 +222,9 @@ func (m *uln28byj) doStop(ctx context.Context) error {
 func (m *uln28byj) doStep(ctx context.Context, forward bool) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	start := time.Now()
+
 	if forward {
 		m.stepPosition++
 	} else {
@@ -234,26 +238,48 @@ func (m *uln28byj) doStep(ctx context.Context, forward bool) error {
 		nextStepSequence = int(m.stepPosition % 8)
 	}
 
-	err := m.setPins(ctx, stepSequence[nextStepSequence])
+	durations, totalDuration, err := m.setPins(ctx, halfStepSequence[nextStepSequence])
 	if err != nil {
 		return err
 	}
 
 	time.Sleep(m.stepperDelay)
+    elapsed := time.Since(start)
+
+	m.logger.Infof("stepperDelay: %v, elapsed: %v, totalDurationinSetPins: %v, durations: %v", m.stepperDelay, elapsed, totalDuration, durations)
 	return nil
 }
 
 // doTicks sets all 4 pins.
 // must be called in locked context.
-func (m *uln28byj) setPins(ctx context.Context, pins [4]bool) error {
-	err := multierr.Combine(
-		m.in1.Set(ctx, pins[0], nil),
-		m.in2.Set(ctx, pins[1], nil),
-		m.in3.Set(ctx, pins[2], nil),
-		m.in4.Set(ctx, pins[3], nil),
+func (m *uln28byj) setPins(ctx context.Context, pins [4]bool) ([4]time.Duration, time.Duration, error) {
+	var (
+		start      time.Time
+		durations  [4]time.Duration
+		totalStart = time.Now()
+		errs       []error
 	)
 
-	return err
+	start = time.Now()
+	err1 := m.in1.Set(ctx, pins[0], nil)
+	durations[0] = time.Since(start)
+
+	start = time.Now()
+	err2 := m.in2.Set(ctx, pins[1], nil)
+	durations[1] = time.Since(start)
+
+	start = time.Now()
+	err3 := m.in3.Set(ctx, pins[2], nil)
+	durations[2] = time.Since(start)
+
+	start = time.Now()
+	err4 := m.in4.Set(ctx, pins[3], nil)
+	durations[3] = time.Since(start)
+
+	totalDuration := time.Since(totalStart)
+
+	errs = append(errs, err1, err2, err3, err4)
+	return durations, totalDuration, multierr.Combine(errs...)
 }
 
 func (m *uln28byj) getTargetStepPosition() int64 {
