@@ -21,7 +21,8 @@ On the new component panel, copy and paste the following attribute template into
     "in3": "<pin-number>",
     "in4": "<pin-number>"
   },
-  "ticks_per_rotation": <int>
+  "ticks_per_rotation": <int>,
+  "step_mode": "<half|full>"
 }
 ```
 
@@ -33,7 +34,8 @@ The following attributes are available for `viam:uln2003:28byj-48` motors:
 | --------- | ---- | --------- | ----------  |
 | `board` | string | **Required** | `name` of the [board](https://docs.viam.com/components/board/) the motor driver is wired to. |
 | `pins` | object | **Required** | A JSON object containing the pin numbers the `in1`, `in2`, `in3`, and `in4` pins of the motor driver are wired to on the [board](https://docs.viam.com/components/board/). |
-| `ticks_per_rotation` | int | **Required** | Number of full steps in a rotation. The motor takes 5.625*(1/64)° per step. One full rotation (360°) is 4096 steps. |
+| `ticks_per_rotation` | int | **Required** | Number of half steps in a rotation. The motor takes 5.625*(1/64)° per step. One full rotation (360°) is 4096 steps. |
+| `step_mode` | string | Optional | Full (4 step) or Half (8 step) mode. Valid values: "full" or "half". Full mode is recommended for higher speeds. Adjust ticks_per_rotation accordingly. (default: "half")
 
 Refer to your motor and motor driver data sheets for specifics.
 
@@ -48,7 +50,8 @@ Refer to your motor and motor driver data sheets for specifics.
       "in3": "13",
       "in4": "15"
     },
-    "ticks_per_rotation": 4096
+    "ticks_per_rotation": 2048,
+    "step_mode": "full"
   }
 ```
 
