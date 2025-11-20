@@ -164,13 +164,14 @@ func new28byj(
 	m.in4 = in4
 
 	// half step is the default for backward compatibility
-	if mc.StepMode == "" || mc.StepMode == "half" {
+	switch mc.StepMode {
+	case "", "half":
 		m.stepSequence = make([][4]bool, len(halfStepSequence))
 		copy(m.stepSequence, halfStepSequence[:])
-	} else if mc.StepMode == "full" {
+	case "full":
 		m.stepSequence = make([][4]bool, len(fullStepSequence))
 		copy(m.stepSequence, fullStepSequence[:])
-	} else {
+	default:
 		return nil, errors.New("step_mode must be 'half' or 'full'")
 	}
 
@@ -272,7 +273,13 @@ func (m *uln28byj) doStep(ctx context.Context, forward bool) error {
 	elapsed := time.Since(start)
 	time.Sleep(m.stepperDelay - elapsed) // will return immediately on negative or zero duration
 
-	//m.logger.Infof("stepperDelay: %v, elapsed: %v, totalDurationinSetPins: %v, sleptFor: %v", m.stepperDelay, elapsed, totalDuration, m.stepperDelay-elapsed)
+	/*
+	m.logger.Infof("stepperDelay: %v, elapsed: %v, totalDurationinSetPins: %v, sleptFor: %v",
+		m.stepperDelay,
+		elapsed,
+		totalDuration,
+		m.stepperDelay-elapsed)
+	*/
 	return nil
 }
 
