@@ -223,3 +223,15 @@
     :why:
     :versions: []
     :when: 2024-12-03 20:21:04.946556000 Z
+- - :approve
+  - codeberg.org/go-fonts/liberation
+  - :who:
+    :why:
+    :versions: []
+    :when: 2025-11-20 23:16:48.137507000 Z
+- - :approve
+  - codeberg.org/go-latex/latex
+  - :who:
+    :why:
+    :versions: []
+    :when: 2025-11-20 23:17:02.330862000 Z
