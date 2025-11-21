@@ -333,6 +333,7 @@ func TestStateHalfStep(t *testing.T) {
 	mm, _ := new28byj(ctx, deps, c, logger)
 	m := mm.(*uln28byj)
 
+	//nolint:dupl
 	t.Run("test half steps sequence", func(t *testing.T) {
 		err := m.ResetZeroPosition(ctx, -0.09, nil)
 		test.That(t, err, test.ShouldBeNil)
@@ -414,6 +415,8 @@ func TestStateFullStep(t *testing.T) {
 	}
 	mm, _ := new28byj(ctx, deps, c, logger)
 	m := mm.(*uln28byj)
+
+	//nolint:dupl
 
 	t.Run("test full steps sequence", func(t *testing.T) {
 		test.That(t, m.stepSequence, test.ShouldResemble, fullStepSequence[:])
