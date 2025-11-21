@@ -417,7 +417,6 @@ func TestStateFullStep(t *testing.T) {
 	m := mm.(*uln28byj)
 
 	//nolint:dupl
-
 	t.Run("test full steps sequence", func(t *testing.T) {
 		test.That(t, m.stepSequence, test.ShouldResemble, fullStepSequence[:])
 		b := m.theBoard
