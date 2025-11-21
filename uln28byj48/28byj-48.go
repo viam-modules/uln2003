@@ -189,6 +189,7 @@ type uln28byj struct {
 	motorName          string
 
 	// state
+	// TODO: state variables need to protected by a mutex in code
 	workers   *utils.StoppableWorkers
 	lock      sync.Mutex
 	opMgr     *operation.SingleOperationManager
@@ -208,6 +209,7 @@ func (m *uln28byj) doRun() {
 	}
 
 	// start a new doRun
+	// TODO: no need to have both a cancellable context and stoppable workers.
 	var doRunCtx context.Context
 	doRunCtx, m.doRunDone = context.WithCancel(context.Background())
 	m.workers = utils.NewBackgroundStoppableWorkers(func(ctx context.Context) {
@@ -218,6 +220,7 @@ func (m *uln28byj) doRun() {
 			default:
 			}
 
+			// TODO: This is a tight infinite loop. Fix it.
 			if m.getStepPosition() == m.getTargetStepPosition() {
 				if err := m.doStop(doRunCtx); err != nil {
 					m.logger.Errorf("error setting pins to zero %v", err)
