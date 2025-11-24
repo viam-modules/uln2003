@@ -119,6 +119,7 @@ issues:
         - exhaustive
         - goconst
         - gosec
+        - dupl
     - path: /doc.go$
       linters:
         - lll

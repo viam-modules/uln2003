@@ -35,7 +35,7 @@ jobs:
         fi
     - name: Add + Commit + Open PR
       if: steps.gobump.outputs.needs_pr == 1
-      uses: peter-evans/create-pull-request@v5
+      uses: peter-evans/create-pull-request@v7
       with:
           commit-message: '[WORKFLOW] Updating go dependencies'
           branch: 'workflow/update-dependencies'
