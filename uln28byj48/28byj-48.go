@@ -248,10 +248,10 @@ func (m *uln28byj) doStop(ctx context.Context) error {
 // Depending on the direction, doStep will either treverse the stepSequence array in ascending
 // or descending order.
 func (m *uln28byj) doStep(ctx context.Context, forward bool) error {
+	start := time.Now()
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
-
-	start := time.Now()
 
 	if forward {
 		m.stepPosition++
