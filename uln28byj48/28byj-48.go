@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"go.uber.org/multierr"
 	"go.viam.com/rdk/components/board"
 	"go.viam.com/rdk/components/motor"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/operation"
 	"go.viam.com/rdk/resource"
+	rdkutils "go.viam.com/rdk/utils"
 	"go.viam.com/utils"
 )
 
@@ -40,9 +40,9 @@ var (
 	maxRPM               = 15.0                   // max rpm of the 28byj-48 motor after gear reduction
 )
 
-// stepSequence contains switching signal for uln2003 pins.
-// Treversing through stepSequence once is one step.
-var stepSequence = [8][4]bool{
+// halfStepSequence contains switching signal for uln2003 pins.
+// Treversing through halfStepSequence once is one step.
+var halfStepSequence = [8][4]bool{
 	{false, false, false, true},
 	{true, false, false, true},
 	{true, false, false, false},
@@ -50,6 +50,13 @@ var stepSequence = [8][4]bool{
 	{false, true, false, false},
 	{false, true, true, false},
 	{false, false, true, false},
+	{false, false, true, true},
+}
+
+var fullStepSequence = [4][4]bool{
+	{true, false, false, true},
+	{true, true, false, false},
+	{false, true, true, false},
 	{false, false, true, true},
 }
 
@@ -66,33 +73,38 @@ type Config struct {
 	Pins             PinConfig `json:"pins"`
 	BoardName        string    `json:"board"`
 	TicksPerRotation int       `json:"ticks_per_rotation"`
+	StepMode         string    `json:"step_mode"`
 }
 
 // Validate ensures all parts of the config are valid.
-func (conf *Config) Validate(path string) ([]string, error) {
+func (conf *Config) Validate(path string) ([]string, []string, error) {
 	var deps []string
 	if conf.BoardName == "" {
-		return nil, resource.NewConfigValidationFieldRequiredError(path, "board")
+		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "board")
 	}
 
 	if conf.Pins.In1 == "" {
-		return nil, resource.NewConfigValidationFieldRequiredError(path, "in1")
+		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "in1")
 	}
 
 	if conf.Pins.In2 == "" {
-		return nil, resource.NewConfigValidationFieldRequiredError(path, "in2")
+		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "in2")
 	}
 
 	if conf.Pins.In3 == "" {
-		return nil, resource.NewConfigValidationFieldRequiredError(path, "in3")
+		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "in3")
 	}
 
 	if conf.Pins.In4 == "" {
-		return nil, resource.NewConfigValidationFieldRequiredError(path, "in4")
+		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "in4")
+	}
+
+	if conf.StepMode != "" && conf.StepMode != "half" && conf.StepMode != "full" {
+		return nil, nil, errors.New("step_mode must be 'half' or 'full'")
 	}
 
 	deps = append(deps, conf.BoardName)
-	return deps, nil
+	return deps, nil, nil
 }
 
 func init() {
@@ -109,7 +121,7 @@ func new28byj(
 		return nil, err
 	}
 
-	b, err := board.FromDependencies(deps, mc.BoardName)
+	b, err := board.FromProvider(deps, mc.BoardName)
 	if err != nil {
 		return nil, errors.Wrap(err, "expected board name in config for motor")
 	}
@@ -151,6 +163,18 @@ func new28byj(
 	}
 	m.in4 = in4
 
+	// half step is the default for backward compatibility
+	switch mc.StepMode {
+	case "", "half":
+		m.stepSequence = make([][4]bool, len(halfStepSequence))
+		copy(m.stepSequence, halfStepSequence[:])
+	case "full":
+		m.stepSequence = make([][4]bool, len(fullStepSequence))
+		copy(m.stepSequence, fullStepSequence[:])
+	default:
+		return nil, errors.New("step_mode must be 'half' or 'full'")
+	}
+
 	return m, nil
 }
 
@@ -165,11 +189,13 @@ type uln28byj struct {
 	motorName          string
 
 	// state
+	// TODO: state variables need to protected by a mutex in code
 	workers   *utils.StoppableWorkers
 	lock      sync.Mutex
 	opMgr     *operation.SingleOperationManager
 	doRunDone func()
 
+	stepSequence       [][4]bool
 	stepPosition       int64
 	stepperDelay       time.Duration
 	targetStepPosition int64
@@ -183,6 +209,7 @@ func (m *uln28byj) doRun() {
 	}
 
 	// start a new doRun
+	// TODO: no need to have both a cancellable context and stoppable workers.
 	var doRunCtx context.Context
 	doRunCtx, m.doRunDone = context.WithCancel(context.Background())
 	m.workers = utils.NewBackgroundStoppableWorkers(func(ctx context.Context) {
@@ -193,6 +220,7 @@ func (m *uln28byj) doRun() {
 			default:
 			}
 
+			// TODO: This is a tight infinite loop. Fix it.
 			if m.getStepPosition() == m.getTargetStepPosition() {
 				if err := m.doStop(doRunCtx); err != nil {
 					m.logger.Errorf("error setting pins to zero %v", err)
@@ -213,14 +241,18 @@ func (m *uln28byj) doRun() {
 func (m *uln28byj) doStop(ctx context.Context) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	return m.setPins(ctx, [4]bool{false, false, false, false})
+	_, err := m.setPins(ctx, [4]bool{false, false, false, false})
+	return err
 }
 
 // Depending on the direction, doStep will either treverse the stepSequence array in ascending
 // or descending order.
 func (m *uln28byj) doStep(ctx context.Context, forward bool) error {
+	start := time.Now()
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
 	if forward {
 		m.stepPosition++
 	} else {
@@ -228,32 +260,51 @@ func (m *uln28byj) doStep(ctx context.Context, forward bool) error {
 	}
 
 	var nextStepSequence int
+
+	numSteps := len(m.stepSequence)
 	if m.stepPosition < 0 {
-		nextStepSequence = 7 + int(m.stepPosition%8)
+		nextStepSequence = (numSteps - 1) + int(m.stepPosition%int64(numSteps))
 	} else {
-		nextStepSequence = int(m.stepPosition % 8)
+		nextStepSequence = int(m.stepPosition % int64(numSteps))
 	}
 
-	err := m.setPins(ctx, stepSequence[nextStepSequence])
+	_, err := m.setPins(ctx, m.stepSequence[nextStepSequence])
 	if err != nil {
 		return err
 	}
 
-	time.Sleep(m.stepperDelay)
+	elapsed := time.Since(start)
+	time.Sleep(m.stepperDelay - elapsed) // will return immediately on negative or zero duration
+
+	/*
+	m.logger.Infof("stepperDelay: %v, elapsed: %v, totalDurationinSetPins: %v, sleptFor: %v",
+		m.stepperDelay,
+		elapsed,
+		totalDuration,
+		m.stepperDelay-elapsed)
+	*/
 	return nil
 }
 
 // doTicks sets all 4 pins.
 // must be called in locked context.
-func (m *uln28byj) setPins(ctx context.Context, pins [4]bool) error {
-	err := multierr.Combine(
-		m.in1.Set(ctx, pins[0], nil),
-		m.in2.Set(ctx, pins[1], nil),
-		m.in3.Set(ctx, pins[2], nil),
-		m.in4.Set(ctx, pins[3], nil),
-	)
-
-	return err
+func (m *uln28byj) setPins(ctx context.Context, pins [4]bool) (time.Duration, error) {
+	elapsed, err := rdkutils.RunInParallel(ctx,
+		[]rdkutils.SimpleFunc{
+			func(ctx context.Context) error {
+				return m.in1.Set(ctx, pins[0], nil)
+			},
+			func(ctx context.Context) error {
+				return m.in2.Set(ctx, pins[1], nil)
+			},
+			func(ctx context.Context) error {
+				return m.in3.Set(ctx, pins[2], nil)
+			},
+			func(ctx context.Context) error {
+				return m.in4.Set(ctx, pins[3], nil)
+			},
+		})
+	return elapsed, err
 }
 
 func (m *uln28byj) getTargetStepPosition() int64 {
@@ -445,6 +496,7 @@ func (m *uln28byj) Stop(ctx context.Context, extra map[string]interface{}) error
 	}
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
 	m.targetStepPosition = m.stepPosition
 	return nil
 }
@@ -468,6 +520,8 @@ func (m *uln28byj) Close(ctx context.Context) error {
 	if err := m.Stop(ctx, nil); err != nil {
 		return err
 	}
-	m.workers.Stop()
+	if m.workers != nil {
+		m.workers.Stop()
+	}
 	return nil
 }
