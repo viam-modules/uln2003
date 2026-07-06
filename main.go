@@ -5,7 +5,6 @@ import (
 	"context"
 
 	"github.com/viam-modules/uln2003/uln28byj48"
-
 	"go.viam.com/rdk/components/motor"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/module"
