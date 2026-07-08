@@ -277,11 +277,11 @@ func (m *uln28byj) doStep(ctx context.Context, forward bool) error {
 	time.Sleep(m.stepperDelay - elapsed) // will return immediately on negative or zero duration
 
 	/*
-	m.logger.Infof("stepperDelay: %v, elapsed: %v, totalDurationinSetPins: %v, sleptFor: %v",
-		m.stepperDelay,
-		elapsed,
-		totalDuration,
-		m.stepperDelay-elapsed)
+		m.logger.Infof("stepperDelay: %v, elapsed: %v, totalDurationinSetPins: %v, sleptFor: %v",
+			m.stepperDelay,
+			elapsed,
+			totalDuration,
+			m.stepperDelay-elapsed)
 	*/
 	return nil
 }
