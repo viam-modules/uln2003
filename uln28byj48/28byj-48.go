@@ -189,11 +189,13 @@ type uln28byj struct {
 	motorName          string
 
 	// state
-	// TODO: state variables need to protected by a mutex in code
+	lock  sync.Mutex
+	opMgr *operation.SingleOperationManager
+
+	// workersMu guards workers. It must never be acquired while holding lock:
+	// stopping a worker waits for a goroutine that itself acquires lock.
+	workersMu sync.Mutex
 	workers   *utils.StoppableWorkers
-	lock      sync.Mutex
-	opMgr     *operation.SingleOperationManager
-	doRunDone func()
 
 	stepSequence       [][4]bool
 	stepPosition       int64
@@ -201,40 +203,41 @@ type uln28byj struct {
 	targetStepPosition int64
 }
 
-// doRun runs the motor till it reaches target step position.
+// doRun replaces any running worker with a new one that steps the motor
+// toward the target step position. The worker exits once the target is
+// reached (after de-energizing the pins) or the worker is stopped.
 func (m *uln28byj) doRun() {
-	// cancel doRun if it already exists
-	if m.doRunDone != nil {
-		m.doRunDone()
-	}
+	m.workersMu.Lock()
+	defer m.workersMu.Unlock()
 
-	// start a new doRun
-	// TODO: no need to have both a cancellable context and stoppable workers.
-	var doRunCtx context.Context
-	doRunCtx, m.doRunDone = context.WithCancel(context.Background())
+	if m.workers != nil {
+		m.workers.Stop()
+	}
 	m.workers = utils.NewBackgroundStoppableWorkers(func(ctx context.Context) {
-		for {
-			select {
-			case <-doRunCtx.Done():
+		for ctx.Err() == nil {
+			if m.getStepPosition() == m.getTargetStepPosition() {
+				if err := m.doStop(ctx); err != nil {
+					m.logger.Errorf("error setting pins to zero %v", err)
+				}
 				return
-			default:
 			}
 
-			// TODO: This is a tight infinite loop. Fix it.
-			if m.getStepPosition() == m.getTargetStepPosition() {
-				if err := m.doStop(doRunCtx); err != nil {
-					m.logger.Errorf("error setting pins to zero %v", err)
-					return
-				}
-			} else {
-				err := m.doStep(doRunCtx, m.getStepPosition() < m.getTargetStepPosition())
-				if err != nil {
-					m.logger.Errorf("error stepping %v", err)
-					return
-				}
+			if err := m.doStep(ctx, m.getStepPosition() < m.getTargetStepPosition()); err != nil {
+				m.logger.Errorf("error stepping %v", err)
+				return
 			}
 		}
 	})
+}
+
+// stopWorkers stops the background worker, if any, and waits for it to exit.
+func (m *uln28byj) stopWorkers() {
+	m.workersMu.Lock()
+	defer m.workersMu.Unlock()
+	if m.workers != nil {
+		m.workers.Stop()
+		m.workers = nil
+	}
 }
 
 // doStop sets all the pins to 0 to stop the motor.
@@ -364,7 +367,7 @@ func (m *uln28byj) GoFor(ctx context.Context, rpm, revolutions float64, extra ma
 
 	err = m.opMgr.WaitForSuccess(
 		ctx,
-		m.stepperDelay,
+		stepperDelay,
 		positionReached,
 	)
 	// Ignore the context canceled error - this occurs when the motor is stopped
@@ -456,11 +459,11 @@ func (m *uln28byj) SetPower(ctx context.Context, powerPct float64, extra map[str
 	}
 
 	m.lock.Lock()
-	defer m.lock.Unlock()
 	direction := motor.GetSign(powerPct) // get the direction to set target to -ve/+ve Inf
 	m.targetStepPosition = int64(math.Inf(int(direction)))
 	powerPct = motor.ClampPower(powerPct) // ensure 1.0 max and -1.0 min
 	m.stepperDelay = m.calcStepperDelay(powerPct * maxRPM)
+	m.lock.Unlock()
 
 	m.doRun()
 
@@ -491,14 +494,13 @@ func (m *uln28byj) IsMoving(ctx context.Context) (bool, error) {
 
 // Stop turns the power to the motor off immediately, without any gradual step down.
 func (m *uln28byj) Stop(ctx context.Context, extra map[string]interface{}) error {
-	if m.doRunDone != nil {
-		m.doRunDone()
-	}
-	m.lock.Lock()
-	defer m.lock.Unlock()
+	m.stopWorkers()
 
+	m.lock.Lock()
 	m.targetStepPosition = m.stepPosition
-	return nil
+	m.lock.Unlock()
+
+	return m.doStop(ctx)
 }
 
 // IsPowered returns whether or not the motor is currently on. It also returns the percent power
@@ -517,11 +519,5 @@ func (m *uln28byj) IsPowered(ctx context.Context, extra map[string]interface{}) 
 }
 
 func (m *uln28byj) Close(ctx context.Context) error {
-	if err := m.Stop(ctx, nil); err != nil {
-		return err
-	}
-	if m.workers != nil {
-		m.workers.Stop()
-	}
-	return nil
+	return m.Stop(ctx, nil)
 }
