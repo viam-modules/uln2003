@@ -40,6 +40,11 @@ var (
 	maxRPM               = 15.0                   // max rpm of the 28byj-48 motor after gear reduction
 )
 
+const (
+	stepModeHalf = "half"
+	stepModeFull = "full"
+)
+
 // halfStepSequence contains switching signal for uln2003 pins.
 // Treversing through halfStepSequence once is one step.
 var halfStepSequence = [8][4]bool{
@@ -99,7 +104,7 @@ func (conf *Config) Validate(path string) ([]string, []string, error) {
 		return nil, nil, resource.NewConfigValidationFieldRequiredError(path, "in4")
 	}
 
-	if conf.StepMode != "" && conf.StepMode != "half" && conf.StepMode != "full" {
+	if conf.StepMode != "" && conf.StepMode != stepModeHalf && conf.StepMode != stepModeFull {
 		return nil, nil, errors.New("step_mode must be 'half' or 'full'")
 	}
 
@@ -165,10 +170,10 @@ func new28byj(
 
 	// half step is the default for backward compatibility
 	switch mc.StepMode {
-	case "", "half":
+	case "", stepModeHalf:
 		m.stepSequence = make([][4]bool, len(halfStepSequence))
 		copy(m.stepSequence, halfStepSequence[:])
-	case "full":
+	case stepModeFull:
 		m.stepSequence = make([][4]bool, len(fullStepSequence))
 		copy(m.stepSequence, fullStepSequence[:])
 	default:
@@ -192,8 +197,6 @@ type uln28byj struct {
 	lock  sync.Mutex
 	opMgr *operation.SingleOperationManager
 
-	// workersMu guards workers. It must never be acquired while holding lock:
-	// stopping a worker waits for a goroutine that itself acquires lock.
 	workersMu sync.Mutex
 	workers   *utils.StoppableWorkers
 
@@ -205,7 +208,7 @@ type uln28byj struct {
 
 // doRun replaces any running worker with a new one that steps the motor
 // toward the target step position. The worker exits once the target is
-// reached (after de-energizing the pins) or the worker is stopped.
+// reached or the worker is stopped.
 func (m *uln28byj) doRun() {
 	m.workersMu.Lock()
 	defer m.workersMu.Unlock()
