@@ -43,6 +43,9 @@ var (
 const (
 	stepModeHalf = "half"
 	stepModeFull = "full"
+
+	defaultHalfStepTicksPerRotation = 4096
+	defaultFullStepTicksPerRotation = 2048
 )
 
 // halfStepSequence contains switching signal for uln2003 pins.
@@ -131,14 +134,22 @@ func new28byj(
 		return nil, errors.Wrap(err, "expected board name in config for motor")
 	}
 
-	if mc.TicksPerRotation <= 0 {
+	if mc.TicksPerRotation < 0 {
 		return nil, errors.New("expected ticks_per_rotation to be greater than zero in config for motor")
+	}
+	ticksPerRotation := mc.TicksPerRotation
+	if ticksPerRotation == 0 {
+		if mc.StepMode == "full" {
+			ticksPerRotation = defaultFullStepTicksPerRotation
+		} else {
+			ticksPerRotation = defaultHalfStepTicksPerRotation
+		}
 	}
 
 	m := &uln28byj{
 		Named:            conf.ResourceName().AsNamed(),
 		theBoard:         b,
-		ticksPerRotation: mc.TicksPerRotation,
+		ticksPerRotation: ticksPerRotation,
 		logger:           logger,
 		motorName:        conf.Name,
 		opMgr:            operation.NewSingleOperationManager(),

@@ -65,19 +65,27 @@ func TestValid(t *testing.T) {
 		ConvertedAttributes: &mc,
 	}
 
-	// Create motor with no board and default config
-	t.Run("motor initializing test with no board and default config", func(t *testing.T) {
-		_, err := new28byj(ctx, deps, c, logger)
-		test.That(t, err, test.ShouldNotBeNil)
+	// ticks_per_rotation is optional and defaults based on step_mode
+	t.Run("motor initializing test with default ticks_per_rotation in half step mode", func(t *testing.T) {
+		mm, err := new28byj(ctx, deps, c, logger)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, mm.(*uln28byj).ticksPerRotation, test.ShouldEqual, defaultHalfStepTicksPerRotation)
 	})
 
-	// Create motor with board and default config
-	t.Run("gpiostepper initializing test with board and default config", func(t *testing.T) {
+	t.Run("motor initializing test with default ticks_per_rotation in full step mode", func(t *testing.T) {
+		mc.StepMode = "full"
+		defer func() { mc.StepMode = "" }()
+		mm, err := new28byj(ctx, deps, c, logger)
+		test.That(t, err, test.ShouldBeNil)
+		test.That(t, mm.(*uln28byj).ticksPerRotation, test.ShouldEqual, defaultFullStepTicksPerRotation)
+	})
+
+	t.Run("motor initializing test with negative ticks_per_rotation", func(t *testing.T) {
+		mc.TicksPerRotation = -1
+		defer func() { mc.TicksPerRotation = 0 }()
 		_, err := new28byj(ctx, deps, c, logger)
 		test.That(t, err, test.ShouldNotBeNil)
 	})
-	_, err := new28byj(ctx, deps, c, logger)
-	test.That(t, err, test.ShouldNotBeNil)
 
 	mc.TicksPerRotation = 200
 
