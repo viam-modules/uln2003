@@ -462,8 +462,12 @@ func (m *uln28byj) SetPower(ctx context.Context, powerPct float64, extra map[str
 	}
 
 	m.lock.Lock()
-	direction := motor.GetSign(powerPct) // get the direction to set target to -ve/+ve Inf
-	m.targetStepPosition = int64(math.Inf(int(direction)))
+	// set the target to the min/max step position so the motor runs until stopped
+	if motor.GetSign(powerPct) < 0 {
+		m.targetStepPosition = math.MinInt64
+	} else {
+		m.targetStepPosition = math.MaxInt64
+	}
 	powerPct = motor.ClampPower(powerPct) // ensure 1.0 max and -1.0 min
 	m.stepperDelay = m.calcStepperDelay(powerPct * maxRPM)
 	m.lock.Unlock()
