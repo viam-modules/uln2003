@@ -235,3 +235,21 @@
     :why:
     :versions: []
     :when: 2025-11-20 23:17:02.330862000 Z
+- - :permit
+  - Mozilla Public License 2.0
+  - :who:
+    :why:
+    :versions: []
+    :when: 2026-07-20 17:59:41.882143000 Z
+- - :approve
+  - github.com/hashicorp/go-getter
+  - :who:
+    :why:
+    :versions: []
+    :when: 2026-07-20 18:00:38.231609000 Z
+- - :approve
+  - github.com/hashicorp/go-version
+  - :who:
+    :why:
+    :versions: []
+    :when: 2026-07-20 18:00:43.355918000 Z
