@@ -337,6 +337,16 @@ func TestStateHalfStep(t *testing.T) {
 		err := m.ResetZeroPosition(ctx, -0.09, nil)
 		test.That(t, err, test.ShouldBeNil)
 		b := m.theBoard
+
+		// clear the pin writes made by the stop inside ResetZeroPosition so the
+		// assertions below only see the stepping sequence
+		for _, name := range []string{"1", "2", "3", "4"} {
+			pin, err := b.GPIOPinByName(name)
+			test.That(t, err, test.ShouldBeNil)
+			mockPin, ok := pin.(*mockGPIOPin)
+			test.That(t, ok, test.ShouldBeTrue)
+			mockPin.pinStates = nil
+		}
 		var pin1Arr []bool
 		var pin2Arr []bool
 		var pin3Arr []bool
